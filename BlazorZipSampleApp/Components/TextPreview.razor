@@ -1,0 +1,13 @@
+﻿@if (Text != null)
+{
+    <p>@Text</p>
+}
+else
+{
+    <p>Null Text</p>
+}
+
+@code {
+    [Parameter]
+    public string? Text { get; set; }
+}

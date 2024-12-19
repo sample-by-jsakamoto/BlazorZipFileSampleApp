@@ -1,0 +1,109 @@
+﻿@using System.IO.Compression
+@using System.Text
+@using System.Xml.Linq
+@inject IJSRuntime JSRuntime
+@page "/"
+
+<h3>ZipArchive example</h3>
+
+<InputFile OnChange="LoadFilesAsync" accept=".zip" />
+
+@if(!string.IsNullOrEmpty(_errorMessage))
+{
+    <p>@_errorMessage</p>
+}
+@if(_zipInfo != null)
+{
+    <button type="button" @onclick="SaveZipAsync">Save</button>
+}
+
+<ZipContentList ZipInfo="_zipInfo" />
+
+
+@code {
+    private int MaxZipSize = 10000000;
+    private ZipInfo? _zipInfo;
+    private string _errorMessage = string.Empty;
+
+    private async Task LoadFilesAsync(InputFileChangeEventArgs e)
+    {
+        try 
+        {
+            _errorMessage = string.Empty;
+            IBrowserFile file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(MaxZipSize).CopyToAsync(ms);
+
+            var zipInfo = new ZipInfo() { Name = file.Name };
+            using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+
+            foreach (var entry in archive.Entries)
+            {
+                // ignoring directories
+                if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith("/"))
+                {
+                    zipInfo.Append(entry.FullName);
+                    continue;
+                }
+                // recommended to use buffer if large file will be accept
+                using var fs = entry.Open();
+                using var fms = new MemoryStream();
+                await fs.CopyToAsync(fms);
+
+                var content = new ZipContent() { Name = entry.Name, FullName = entry.FullName, Bytes = fms.ToArray(), Size = entry.Length };
+                zipInfo.Append(content);
+            }
+
+            _zipInfo = zipInfo;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.ToString();
+        }
+    }
+    private async Task SaveZipAsync()
+    {
+        if (_zipInfo == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _errorMessage = string.Empty;
+            using (var zipStream = new MemoryStream())
+            {
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, true))
+                {
+                    foreach (var dir in _zipInfo.Directories)
+                    {
+                        archive.CreateEntry(dir);
+                    }
+                    foreach (var content in _zipInfo.Contents)
+                    {
+                        var entry = archive.CreateEntry(content.FullName);
+                        using (var entryStream = entry.Open())
+                        {
+                            await entryStream.WriteAsync(content.Bytes, 0, (int)content.Bytes.Length);
+                        }
+                    }
+
+                    var csvBytes = Encoding.UTF8.GetBytes(_zipInfo.ToCsv());
+                    var csvEntry = archive.CreateEntry("Summary.csv");
+                    using (var entryStream = csvEntry.Open())
+                    {
+                        await entryStream.WriteAsync(csvBytes, 0, (int)csvBytes.Length);
+                    }
+                }
+                zipStream.Position = 0;
+                var bse64Str = Convert.ToBase64String(zipStream.ToArray());
+                await using var module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/savefile.js");
+                await module.InvokeVoidAsync("saveAsZipAsync", _zipInfo.Name, bse64Str);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.ToString();
+        }
+    }
+}

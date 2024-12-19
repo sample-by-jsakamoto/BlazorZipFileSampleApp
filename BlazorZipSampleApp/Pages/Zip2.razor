@@ -1,0 +1,104 @@
+﻿@inject IJSRuntime JSRuntime
+@page "/zipfiles"
+
+<h3>ZipFile example</h3>
+
+<InputFile OnChange="LoadFilesAsync" accept=".zip" />
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <p>@_errorMessage</p>
+}
+@if (_zipInfo != null)
+{
+    <button type="button" @onclick="SaveZipAsync">Save</button>
+}
+
+<ZipContentList ZipInfo="_zipInfo" />
+
+
+@code {
+    private const int MaxZipSize = 10000000;
+    private const string TempExtractPath = "/tmp";
+    private ZipInfo? _zipInfo;
+    private string _errorMessage = string.Empty;
+
+    private async Task LoadFilesAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _errorMessage = string.Empty;
+            IBrowserFile file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(MaxZipSize).CopyToAsync(ms);
+
+            if (Directory.Exists(TempExtractPath))
+            {
+                Directory.Delete(TempExtractPath, true);
+            }
+
+            var zipInfo = new ZipInfo() { Name = file.Name };
+            ZipFile.ExtractToDirectory(ms, TempExtractPath);
+
+            var di = new DirectoryInfo(TempExtractPath);
+            var contents = di.GetFiles("*.*", SearchOption.AllDirectories);
+            foreach (var content in contents)
+            {
+                using var fs = content.OpenRead();
+                using var fms = new MemoryStream();
+                await fs.CopyToAsync(fms);
+                var zcontent = new ZipContent() { Name = content.Name, FullName = content.FullName.Substring(TempExtractPath.Length + 1), Bytes = fms.ToArray(), Size = content.Length };
+                zipInfo.Append(zcontent);
+            }
+
+            _zipInfo = zipInfo;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.ToString();
+        }
+    }
+
+    private const string TempOutPath = "/tmpout";
+
+    private async Task SaveZipAsync()
+    {
+        if (_zipInfo == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _errorMessage = string.Empty;
+
+            if (Directory.Exists(TempOutPath))
+            {
+                Directory.Delete(TempOutPath, true);
+            }
+            Directory.CreateDirectory(TempOutPath);
+
+            var csvBytes = Encoding.UTF8.GetBytes(_zipInfo.ToCsv());
+            await File.WriteAllBytesAsync(Path.Combine(TempExtractPath, "Summary.csv"), csvBytes);
+
+            var zipDestination = Path.Combine(TempOutPath, _zipInfo.Name);
+            ZipFile.CreateFromDirectory(TempExtractPath, zipDestination);
+            var zipBytes = await File.ReadAllBytesAsync(zipDestination);
+            var bse64Str = Convert.ToBase64String(zipBytes);
+
+            await using var module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/savefile.js");
+            await module.InvokeVoidAsync("saveAsZipAsync", _zipInfo.Name, bse64Str);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.ToString();
+        }
+        finally
+        {
+            if (Directory.Exists(TempOutPath))
+            {
+                Directory.Delete(TempOutPath, true);
+            }
+        }
+    }
+}
