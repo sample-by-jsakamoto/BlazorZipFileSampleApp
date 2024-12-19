@@ -1,0 +1,34 @@
+﻿
+
+@if(ZipInfo == null || !ZipInfo.Contents.Any())
+{
+    <p>No data</p>
+}
+else
+{
+    <QuickGrid Items="@ZipInfo.Contents.AsQueryable()" style="margin: 1em;">
+        <PropertyColumn Property="@(p => p.Name)"/>
+        <PropertyColumn Property="@(p => p.Size)"/>
+        <PropertyColumn Property="@(p => p.FullName)" />
+        <TemplateColumn Title="">
+            <button type="button" @onclick="() => OnPreViewClick(context)">Preview</button>
+        </TemplateColumn>
+    </QuickGrid>
+
+    @if(_previewComponentMetaData != null)
+    {
+        <DynamicComponent Type="_previewComponentMetaData.Type" Parameters="_previewComponentMetaData.Parameters" />
+    }
+}
+
+@code {
+    [Parameter]
+    public ZipInfo? ZipInfo { get; set; }
+
+    private ComponentMetadata? _previewComponentMetaData;
+
+    private void OnPreViewClick(ZipContent e)
+    {
+        _previewComponentMetaData = ContentFactory.CreateMetaData(e);
+    }
+}

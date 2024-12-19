@@ -1,0 +1,8 @@
+﻿@if (Exception != null)
+{
+    <p>Unexpected exception:@Exception.ToString()</p>
+}
+@code {
+    [Parameter]
+    public Exception? Exception { get; set; }
+}
