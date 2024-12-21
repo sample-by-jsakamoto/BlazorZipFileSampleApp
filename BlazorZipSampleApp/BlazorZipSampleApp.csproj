@@ -10,6 +10,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.QuickGrid" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.0" PrivateAssets="all" />
+    <PackageReference Include="Toolbelt.Blazor.InvokeDownloadAsync" Version="3.0.0" />
   </ItemGroup>
 
 </Project>

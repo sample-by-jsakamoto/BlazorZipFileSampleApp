@@ -96,9 +96,7 @@
                     }
                 }
                 zipStream.Position = 0;
-                var bse64Str = Convert.ToBase64String(zipStream.ToArray());
-                await using var module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/savefile.js");
-                await module.InvokeVoidAsync("saveAsZipAsync", _zipInfo.Name, bse64Str);
+                await JSRuntime.InvokeDownloadAsync(_zipInfo.Name, "application/zip", zipStream);
             }
         }
         catch (Exception ex)
